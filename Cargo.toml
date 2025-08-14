@@ -1,0 +1,8 @@
+[package]
+name = "waitq"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spin = "0.9"
+thid = { path = "../thid" }
