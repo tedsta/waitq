@@ -124,7 +124,9 @@ impl<T: IFulfillment> WaiterNode<T> {
                 Some(waker)
             }
             // A WaiterNode can be notified exactly once.
-            WaiterNodeState::Notified { fulfillment: existing_fulfillment } => {
+            WaiterNodeState::Notified {
+                fulfillment: existing_fulfillment,
+            } => {
                 existing_fulfillment.append(fulfillment);
                 None
             }
@@ -271,7 +273,10 @@ impl<T: IFulfillment> WaiterQueue<T> {
             WaiterLifecycle::Registered,
         );
 
-        let fulfillment = Fulfillment { inner: fulfillment, count: 1 };
+        let fulfillment = Fulfillment {
+            inner: fulfillment,
+            count: 1,
+        };
 
         let mut guard = self.lock();
         if guard.remove_waiter(local_head) {
@@ -321,20 +326,17 @@ impl<T: IFulfillment> WaiterQueue<T> {
         // Before registering the waiter in the shared queue, set its shared state from
         // its local state in case it was already polled (so that the waker is properly set).
         let waiter_ref = unsafe { waiter.as_ref() };
-        *waiter_ref.state.lock() =
-            match unsafe { &*waiter_ref.local_state.get() } {
-                WaiterNodeState::Pending => WaiterNodeState::Pending,
-                WaiterNodeState::Polled { waker } => WaiterNodeState::Polled {
-                    waker: waker.clone(),
-                },
-                WaiterNodeState::Notified { .. } => unreachable!(),
-                WaiterNodeState::Releasing => unreachable!(),
-            };
+        *waiter_ref.state.lock() = match unsafe { &*waiter_ref.local_state.get() } {
+            WaiterNodeState::Pending => WaiterNodeState::Pending,
+            WaiterNodeState::Polled { waker } => WaiterNodeState::Polled {
+                waker: waker.clone(),
+            },
+            WaiterNodeState::Notified { .. } => unreachable!(),
+            WaiterNodeState::Releasing => unreachable!(),
+        };
 
         guard.add_waiter(waiter);
-        waiter_ref
-            .local_lifecycle
-            .set(WaiterLifecycle::Registered);
+        waiter_ref.local_lifecycle.set(WaiterLifecycle::Registered);
     }
 }
 
@@ -729,12 +731,10 @@ impl<'a, T: IFulfillment> Waiter<'a, T> {
                         WaiterLifecycle::RegisteredLocal,
                     );
 
-                    if let Some(waker) =
-                        unsafe { local_next.as_ref() }.fulfill_local(Fulfillment {
-                            inner: fulfillment.take_one(),
-                            count: 1,
-                        })
-                    {
+                    if let Some(waker) = unsafe { local_next.as_ref() }.fulfill_local(Fulfillment {
+                        inner: fulfillment.take_one(),
+                        count: 1,
+                    }) {
                         waker.wake();
                     }
                 }
@@ -765,7 +765,9 @@ impl<'a, T: IFulfillment> Waiter<'a, T> {
                                 inner: fulfillment.take_one(),
                                 count: 1,
                             };
-                            if let Some(waker) = unsafe { next_local.as_ref() }.fulfill_local(local_fulfillment) {
+                            if let Some(waker) =
+                                unsafe { next_local.as_ref() }.fulfill_local(local_fulfillment)
+                            {
                                 waker.wake();
                             }
                         }
@@ -776,15 +778,21 @@ impl<'a, T: IFulfillment> Waiter<'a, T> {
                         let notify_count = fulfillment.count - 1;
                         let mut cursor = local_head;
                         for _ in 0..notify_count - 1 {
-                            cursor = unsafe { cursor.as_ref() }.local_next.get()
+                            cursor = unsafe { cursor.as_ref() }
+                                .local_next
+                                .get()
                                 .expect("bug: missing local waiter");
                         }
 
-                        let new_head = unsafe { cursor.as_ref() }.local_next.replace(None)
+                        let new_head = unsafe { cursor.as_ref() }
+                            .local_next
+                            .replace(None)
                             .expect("bug: missing local waiter");
                         unsafe { new_head.as_ref() }.local_prev.set(None);
                         waiter_queue_local.nodes.set(Some((new_head, local_tail)));
-                        waiter_queue_local.count.set(waiter_queue_local.count.get() - notify_count);
+                        waiter_queue_local
+                            .count
+                            .set(waiter_queue_local.count.get() - notify_count);
 
                         // Upgrade the new local head to be in the shared queue and release the
                         // shared queue lock.
