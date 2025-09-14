@@ -362,7 +362,7 @@ impl WaiterQueue<()> {
 
         let result = Cell::new(None);
         loop {
-            WaitUntil {
+            let wait_until = core::pin::pin!(WaitUntil {
                 // SAFETY: WaitUntil::drop cancels the Waiter if necessary.
                 waiter: unsafe { self.wait() },
                 condition: UnsafeCell::new(|| {
@@ -373,8 +373,8 @@ impl WaiterQueue<()> {
                         false
                     }
                 }),
-            }
-            .await;
+            });
+            core::future::poll_fn(|cx| wait_until.as_ref().poll(cx)).await;
 
             if let Some(r) = result.take() {
                 return r;
@@ -384,12 +384,12 @@ impl WaiterQueue<()> {
 
     #[inline]
     pub async fn wait_until(&self, condition: impl Fn() -> bool) {
-        WaitUntil {
+        let wait_until = core::pin::pin!(WaitUntil {
             // SAFETY: WaitUntil::drop cancels the Waiter if necessary.
             waiter: unsafe { self.wait() },
             condition: UnsafeCell::new(condition),
-        }
-        .await;
+        });
+        core::future::poll_fn(|cx| wait_until.as_ref().poll(cx)).await;
     }
 }
 
@@ -829,28 +829,21 @@ pub struct WaitUntil<'a, F> {
     condition: UnsafeCell<F>,
 }
 
-impl<'a, F> WaitUntil<'a, F> {
-    fn waiter(self: Pin<&'_ Self>) -> Pin<&'_ Waiter<'a, ()>> {
-        // SAFETY: `waiter` is pinned when `self` is.
-        unsafe { self.map_unchecked(|s| &s.waiter) }
-    }
-}
-
-impl<F> core::future::Future for WaitUntil<'_, F>
+impl<F> WaitUntil<'_, F>
 where
     F: FnMut() -> bool,
 {
-    type Output = ();
+    // Miri is unhappy with `self: Pin<&mut Self>` even if we do `Pin::as_ref(self)` first thing. So
+    // we can't impl Future. So we do a custom poll method and use poll_fn instead.
+    fn poll(self: Pin<&Self>, context: &mut Context<'_>) -> Poll<()> {
+        // SAFETY: we continue to treat `self.waiter` as pinned, and `self.condition` is never
+        // considered pinned.
+        let unpinned_self = unsafe { Pin::into_inner_unchecked(self) };
+        let waiter = unsafe { Pin::new_unchecked(&unpinned_self.waiter) };
+        // SAFETY: This is the only place that dereferences `self.condition`.
+        let condition = unsafe { &mut *unpinned_self.condition.get() };
 
-    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
-        let Poll::Ready(fulfillment) = self.as_ref().waiter().poll_fulfillment(context, || {
-            // SAFETY: this try_fulfill closure is `FnMut` and this is the only site that accesses
-            // `self.condition`.
-            //
-            // TODO is this actually sound, though? Miri doesn't complain, but `Self::poll` takes
-            // `Pin<&mut Self>`. Is `self.as_ref()` sufficient to relinquish `&mut self` while we
-            // hold a mutable reference to `condition: UnsafeCell<_>`'s contents?
-            let condition = unsafe { &mut *self.as_ref().condition.get() };
+        let Poll::Ready(fulfillment) = waiter.poll_fulfillment(context, || {
             if condition() {
                 Some(Fulfillment {
                     inner: (),

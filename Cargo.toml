@@ -1,6 +1,6 @@
 [package]
 name = "waitq"
-version = "0.0.1"
+version = "0.0.2-dev"
 edition = "2024"
 description = "No-std, no-alloc async waker queue optimized for `!Send` tasks."
 repository = "https://github.com/tedsta/waitq"
