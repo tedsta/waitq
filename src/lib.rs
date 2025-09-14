@@ -681,9 +681,7 @@ impl<'a, T: IFulfillment> Waiter<'a, T> {
                             waker: new_waker.clone(),
                         }
                     } else {
-                        WaiterNodeState::Polled {
-                            waker: waker.clone(),
-                        }
+                        WaiterNodeState::Polled { waker }
                     }
                 }
                 WaiterNodeState::Notified { fulfillment } => {
