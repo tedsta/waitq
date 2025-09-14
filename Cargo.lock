@@ -35,11 +35,13 @@ dependencies = [
 
 [[package]]
 name = "thid"
-version = "0.1.0"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "309033656d80914c59d7029ac985c59d0f3e84a9b58254c1732cf340be75759a"
 
 [[package]]
 name = "waitq"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "spin",
  "thid",

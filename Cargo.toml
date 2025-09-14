@@ -1,8 +1,15 @@
 [package]
 name = "waitq"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+description = "No-std, no-alloc async waker queue optimized for `!Send` tasks."
+repository = "https://github.com/tedsta/waitq"
+documentation = "https://docs.rs/waitq"
+keywords = ["async", "waker", "queue", "thread-local"]
+categories = ["concurrency", "data-structures"]
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 spin = "0.9"
-thid = { path = "../thid" }
+thid = "0.0.1"
