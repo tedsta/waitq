@@ -384,12 +384,19 @@ impl WaiterQueue<()> {
 
     #[inline]
     pub async fn wait_until(&self, condition: impl Fn() -> bool) {
-        let wait_until = core::pin::pin!(WaitUntil {
-            // SAFETY: WaitUntil::drop cancels the Waiter if necessary.
-            waiter: unsafe { self.wait() },
-            condition: UnsafeCell::new(condition),
-        });
-        core::future::poll_fn(|cx| wait_until.as_ref().poll(cx)).await;
+        let condition = &condition;
+        loop {
+            if condition() {
+                return;
+            }
+
+            let wait_until = core::pin::pin!(WaitUntil {
+                // SAFETY: WaitUntil::drop cancels the Waiter if necessary.
+                waiter: unsafe { self.wait() },
+                condition: UnsafeCell::new(condition),
+            });
+            core::future::poll_fn(|cx| wait_until.as_ref().poll(cx)).await;
+        }
     }
 }
 
